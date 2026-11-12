@@ -89,6 +89,27 @@ jobs:
             render deploys create "$RENDER_SERVICE_ID" --wait --confirm --output text
             echo "The new version is live on Render."
 
+  notify:
+    parameters:
+      result:
+        type: enum
+        enum: ["success", "failed"]
+    docker:
+      - image: cimg/base:stable
+    steps:
+      - run:
+          name: Send deployment result to Discord
+          command: |
+            if [ "<< parameters.result >>" = "success" ]; then
+              message="✅ devops-demo-lesson-4.12 deployed to Render (commit ${CIRCLE_SHA1:0:7})"
+            else
+              message="❌ devops-demo-lesson-4.12 deployment to Render failed (commit ${CIRCLE_SHA1:0:7})"
+            fi
+
+            curl --fail --silent --show-error \
+              --header 'Content-Type: application/json' \
+              --data "{\"content\":\"$message\"}" \
+              "$DISCORD_WEBHOOK_URL"
 
 workflows:
   build_test_publish_deploy:
@@ -104,3 +125,14 @@ workflows:
       - deploy:
           requires:
             - publish
+
+      - notify:
+          name: notify-success
+          result: success
+          requires:
+            - deploy: success
+      - notify:
+          name: notify-failure
+          result: failed
+          requires:
+            - deploy: failed
